@@ -22,18 +22,26 @@ def stats(d:Session=Depends(db),_=Depends(require_auth)):return {"websites":d.qu
 def websites(d:Session=Depends(db),_=Depends(require_auth)):return d.query(Website).order_by(Website.id.desc()).all()
 @router.post("/websites")
 def add(x:WebsiteIn,d:Session=Depends(db),_=Depends(require_auth)):
- w=Website(**x.model_dump());d.add(w);d.commit();d.refresh(w);return w
+ w=Website(**x.model_dump());d.add(w);d.commit();d.refresh(w)
+ from .scheduler import schedule_site
+ if w.enabled:schedule_site(w)
+ return w
 @router.put("/websites/{id}")
 def edit(id:int,x:WebsiteIn,d:Session=Depends(db),_=Depends(require_auth)):
  w=d.get(Website,id)
  if not w:raise HTTPException(404,"Website not found")
  for k,v in x.model_dump().items():setattr(w,k,v)
- d.commit();return w
+ d.commit()
+ from .scheduler import schedule_site,unschedule_site
+ if w.enabled:schedule_site(w)
+ else:unschedule_site(w.id)
+ return w
 @router.delete("/websites/{id}")
 def delete(id:int,d:Session=Depends(db),_=Depends(require_auth)):
  w=d.get(Website,id)
  if not w:raise HTTPException(404,"Website not found")
- d.delete(w);d.commit();return {"ok":True}
+ from .scheduler import unschedule_site
+ unschedule_site(id);d.delete(w);d.commit();return {"ok":True}
 def do_scan(id):
  d=SessionLocal();w=d.get(Website,id);s=Scan(website_id=id,status="RUNNING");d.add(s);d.commit()
  try:
