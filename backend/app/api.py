@@ -45,7 +45,13 @@ def delete(id:int,d:Session=Depends(db),_=Depends(require_auth)):
 def do_scan(id):
  d=SessionLocal();w=d.get(Website,id);s=Scan(website_id=id,status="RUNNING");d.add(s);d.commit()
  try:
-  items=scan_rss(w) if w.monitor_type=="rss" else scan_html(w);n=0
+  if w.monitor_type=="rss":items=scan_rss(w)
+  elif w.monitor_type=="pdf":
+   from .pdf_monitor import scan_pdf;items=scan_pdf(w)
+  elif w.monitor_type=="playwright":
+   from .playwright_monitor import scan_playwright;items=scan_playwright(w)
+  else:items=scan_html(w)
+  n=0
   for x in items:
    if d.query(Update).filter(Update.fingerprint==x["fingerprint"]).first():continue
    u=Update(website_id=id,title=x["title"],url=x["url"],category=x["category"],importance=x["importance"],summary=x["content"][:1000],content=x["content"],fingerprint=x["fingerprint"],status="NEW");d.add(u);d.commit();n+=1
